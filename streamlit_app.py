@@ -34,25 +34,34 @@ def get_stock_data(stock_symbol):
         indices, matched, future_average = print_difference_data(array_data, key, value, 13)
         index_dict[key] = (value, indices, matched, future_average)
 
+    # Get last 8 values for current values and past prices
     current_values = [{
-        'date': array_data.iloc[count].name,
+        'date': array_data.iloc[count].name.strftime('%d-%b-%Y'),
         'close': array_data.iloc[count]['Close'],
         'percentage_difference': ((array_data.iloc[count]['Close'] - array_data.iloc[count+1]['Close']) / 
                                   array_data.iloc[count+1]['Close']) * 100
     } for count in range(8)]
 
-    return index_dict, current_values
+    # Get past prices
+    past_prices = [{
+        'date': array_data.iloc[count].name.strftime('%d-%b-%Y'),
+        'close': array_data.iloc[count]['Close'],
+        'percentage_difference': ((array_data.iloc[count]['Close'] - array_data.iloc[count+1]['Close']) / 
+                                  array_data.iloc[count+1]['Close']) * 100
+    } for count in range(8, 16)]
+
+    return index_dict, current_values, past_prices
 
 def print_difference_data(arg_array, index, matched_length, forward_length):
     matched = [{
-        'date': arg_array.iloc[count].name,
+        'date': arg_array.iloc[count].name.strftime('%d-%b-%Y'),
         'close': arg_array.iloc[count]['Close'],
         'percentage_difference': ((arg_array.iloc[count]['Close'] - arg_array.iloc[count+1]['Close']) / 
                                   arg_array.iloc[count+1]['Close']) * 100
     } for count in range(index, index + matched_length)]
 
     indices = [{
-        'date': arg_array.iloc[count].name,
+        'date': arg_array.iloc[count].name.strftime('%d-%b-%Y'),
         'close': arg_array.iloc[count]['Close'],
         'percentage_difference': ((arg_array.iloc[count-1]['Close'] - arg_array.iloc[count]['Close']) / 
                                   arg_array.iloc[count]['Close']) * 100
@@ -93,13 +102,15 @@ def main():
     selected_stock = st.selectbox("Select a stock", list(stock_options.keys()))
 
     if st.button("Analyze"):
-        data_dic, current_values = get_stock_data(stock_options[selected_stock])
+        data_dic, current_values, past_prices = get_stock_data(stock_options[selected_stock])
 
-        # Display current values table
-        st.subheader("Current Stock Values")
-        current_df = pd.DataFrame(current_values[::-1])
-        current_df['color'] = current_df['percentage_difference'].apply(get_cell_color)
-        st.dataframe(current_df.style.apply(lambda x: ['background-color: ' + x['color']] * len(x), axis=1))
+        # Display current and past values in horizontal layout
+        st.subheader("Current and Past Stock Values")
+
+        current_past_df = pd.DataFrame(current_values[::-1] + past_prices[::-1])
+
+        current_past_df['color'] = current_past_df['percentage_difference'].apply(get_cell_color)
+        st.dataframe(current_past_df.style.apply(lambda x: ['background-color: ' + x['color']] * len(x), axis=1))
 
         # Display matched entries table
         st.subheader("Pattern Matches and Projections")
@@ -116,26 +127,49 @@ def main():
             matched_data.append(row)
         
         matched_df = pd.DataFrame(matched_data)
-        st.dataframe(matched_df.style.background_gradient(cmap='RdYlGn', subset=[col for col in matched_df.columns if col.startswith('Day')]))
+
+        # Apply styles only to the percentage difference columns
+        percentage_columns = [col for col in matched_df.columns if 'Day' in col or col == 'Future Avg']
+
+        # Custom styling for the matched entries table
+        def style_cell(val):
+            color = 'black'
+            if val > 0:
+                background_color = 'green'
+            elif val < 0:
+                background_color = 'red'
+            else:
+                background_color = 'white'
+            return f'background-color: {background_color}; color: {color}; font-weight: bold;'
+
+        styles = [
+            dict(selector="th", props=[("font-weight", "bold"), ("text-align", "center")]),
+            dict(selector="td", props=[("text-align", "center")])
+        ]
+        
+        cm = matched_df.style.set_table_styles(styles)\
+            .applymap(style_cell, subset=percentage_columns)
+
+        st.dataframe(cm)
 
         # Create Plotly chart
         st.subheader("Stock Prices and Future Projections")
-        dates = [data['date'] for data in current_values]
+        dates = [datetime.strptime(data['date'], '%d-%b-%Y') for data in current_values]
         current_prices = [data['close'] for data in current_values]
         current_trace = go.Scatter(x=dates, y=current_prices, mode='lines+markers', name='Current Stock Prices', marker=dict(color='blue'))
 
         future_traces = []
         colors = ['green', 'red', 'purple', 'orange', 'brown']
-        last_close = current_values[-1]['close']
-        last_date = current_values[-1]['date']
+        last_close = current_prices[-1]
+        last_date = dates[-1]
 
         for i, (_, data) in enumerate(list(data_dic.items())[:5]):
             pattern, indices, _, _ = data
             future_returns = [index['percentage_difference'] / 100 for index in indices[:10]]
-            future_prices = [last_close]
+            future_prices = [last_close]  # Start future prices from the last close price
             for j in range(10):
                 future_prices.append(future_prices[-1] * (1 + future_returns[j]))
-            future_dates = [last_date + timedelta(days=j+1+8) for j in range(10)]
+            future_dates = [last_date + timedelta(days=j+1+7) for j in range(10)]  # Start future dates after the last date
             future_trace = go.Scatter(x=future_dates, y=future_prices[1:], mode='lines', name=f'Future Return {i+1} ({pattern})', marker=dict(color=colors[i]))
             future_traces.append(future_trace)
 
