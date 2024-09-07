@@ -107,7 +107,8 @@ def main():
         # Display current and past values in horizontal layout
         st.subheader("Current and Past Stock Values")
 
-        current_past_df = pd.DataFrame(current_values[::-1] + past_prices[::-1])
+        # Combine current and past values, and reverse to show latest date first
+        current_past_df = pd.DataFrame(current_values + past_prices)
 
         current_past_df['color'] = current_past_df['percentage_difference'].apply(get_cell_color)
         st.dataframe(current_past_df.style.apply(lambda x: ['background-color: ' + x['color']] * len(x), axis=1))
@@ -119,13 +120,23 @@ def main():
             pattern, indices, matched, future_average = data
             row = {
                 'Date': indices[0]['date'],
-                'Pattern': pattern,
-                'Future Avg': future_average
+                'Pattern': pattern
             }
-            for i, index in enumerate(reversed(matched + indices[:5])):
+            
+            # Add the matched days (historical pattern), in reverse order to show Day 1 as the latest match
+            for i, index in enumerate(reversed(matched)):
                 row[f'Day {i+1}'] = index['percentage_difference']
+            
+            # Mark the end of the pattern match
+            row['End of Match'] = '⬇️'  # Separator to show end of matched pattern
+            
+            # Add the future projection days
+            for j, index in enumerate(indices[:5]):  # Limit future days to 5 for display
+                row[f'Future Day {j+1}'] = index['percentage_difference']
+            
+            row['Future Avg'] = future_average  # The average future return
             matched_data.append(row)
-        
+
         matched_df = pd.DataFrame(matched_data)
 
         # Apply styles only to the percentage difference columns
@@ -146,7 +157,8 @@ def main():
             dict(selector="th", props=[("font-weight", "bold"), ("text-align", "center")]),
             dict(selector="td", props=[("text-align", "center")])
         ]
-        
+
+        # Style and display the dataframe with a clear separation between matched and future days
         cm = matched_df.style.set_table_styles(styles)\
             .applymap(style_cell, subset=percentage_columns)
 
