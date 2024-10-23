@@ -107,13 +107,9 @@ def main():
         # Separate columns for current and future projections
         col1, col2 = st.columns(2)
 
-        # Display current values in the first column
+        # Create Plotly chart for current prices in first column
         with col1:
             st.subheader("Current Stock Prices")
-            current_df = pd.DataFrame(current_values)
-            st.dataframe(current_df)
-
-            # Create Plotly chart for current prices
             dates = [datetime.strptime(data['date'], '%d-%b-%Y')
                      for data in current_values]
             current_prices = [data['close'] for data in current_values]
@@ -126,7 +122,7 @@ def main():
                                       showlegend=False)
             st.plotly_chart(fig_current)
 
-        # Display future values in the second column
+        # Create Plotly chart for future projections in second column
         with col2:
             st.subheader("Future Stock Projections")
             future_traces = []
@@ -134,20 +130,6 @@ def main():
             last_close = current_prices[-1]
             last_date = dates[-1]
 
-            # Create a DataFrame for matched projections
-            matched_data = []
-            for i, (_, data) in enumerate(list(data_dic.items())[:5]):
-                pattern, indices, _, _ = data
-                for index in indices[:10]:
-                    matched_data.append({
-                        'date': index['date'],
-                        'percentage_difference': index['percentage_difference']
-                    })
-
-            future_df = pd.DataFrame(matched_data)
-            st.dataframe(future_df)
-
-            # Plot future projections
             for i, (_, data) in enumerate(list(data_dic.items())[:5]):
                 pattern, indices, _, _ = data
                 future_returns = [
