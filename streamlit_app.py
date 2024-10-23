@@ -76,27 +76,6 @@ def print_difference_data(arg_array, index, matched_length, forward_length):
     return indices, matched, future_average
 
 
-def get_cell_color(value):
-    if value < -2:
-        return "#800000"
-    elif value < -1:
-        return "#FF0000"
-    elif value < -0.5:
-        return "#FFA07A"
-    elif value < 0:
-        return "#FF4500"
-    elif value == 0:
-        return "white"
-    elif value < 0.5:
-        return "#90EE90"
-    elif value < 1:
-        return "#006400"
-    elif value < 2:
-        return "#008000"
-    else:
-        return "#006400"
-
-
 def main():
     st.title("Stock Analysis App")
 
@@ -104,19 +83,19 @@ def main():
         "ASX": "^AXJO",
         "NDQ": "^IXIC",
         "BTC": "BTC-USD",
-        "NIKKEI": "^N225",        # Japan 225
-        "HANG_SENG": "^HSI",      # Hang Seng Index
-        "FTSE_100": "^FTSE",      # FTSE 100
-        "DAX": "^GDAXI",          # DAX (Germany)
-        "CAC_40": "^FCHI",        # CAC 40 (France)
-        "S&P_500": "^GSPC",       # S&P 500 (USA)
-        "TSX": "^GSPTSE",         # S&P/TSX Composite Index (Canada)
-        "NSE_INDIA": "^NSEI",     # NSE India
-        "IBEX_35": "^IBEX",       # IBEX 35 (Spain)
-        "AEX": "^AEX",            # AEX Index (Netherlands)
-        "MIB": "^FTSEMIB",        # FTSE MIB (Italy)
-        "BOVESPA": "^BVSP",       # Bovespa Index (Brazil)
-        "IPC": "^MEXBOL"          # IPC Index (Mexico)
+        "NIKKEI": "^N225",
+        "HANG_SENG": "^HSI",
+        "FTSE_100": "^FTSE",
+        "DAX": "^GDAXI",
+        "CAC_40": "^FCHI",
+        "S&P_500": "^GSPC",
+        "TSX": "^GSPTSE",
+        "NSE_INDIA": "^NSEI",
+        "IBEX_35": "^IBEX",
+        "AEX": "^AEX",
+        "MIB": "^FTSEMIB",
+        "BOVESPA": "^BVSP",
+        "IPC": "^MEXBOL"
     }
 
     selected_stock = st.selectbox("Select a stock", list(stock_options.keys()))
@@ -125,105 +104,68 @@ def main():
         data_dic, current_values, past_prices = get_stock_data(
             stock_options[selected_stock])
 
-        # Display current and past values in horizontal layout
-        st.subheader("Current and Past Stock Values")
+        # Separate columns for current and future projections
+        col1, col2 = st.columns(2)
 
-        # Combine current and past values, and reverse to show latest date first
-        current_past_df = pd.DataFrame(current_values + past_prices)
+        # Display current values in the first column
+        with col1:
+            st.subheader("Current Stock Prices")
+            current_df = pd.DataFrame(current_values)
+            st.dataframe(current_df)
 
-        current_past_df['color'] = current_past_df['percentage_difference'].apply(
-            get_cell_color)
-        st.dataframe(current_past_df.style.apply(
-            lambda x: ['background-color: ' + x['color']] * len(x), axis=1))
+            # Create Plotly chart for current prices
+            dates = [datetime.strptime(data['date'], '%d-%b-%Y')
+                     for data in current_values]
+            current_prices = [data['close'] for data in current_values]
+            current_trace = go.Scatter(x=dates, y=current_prices, mode='lines+markers',
+                                       name='Current Stock Prices', marker=dict(color='blue'))
 
-        # Display matched entries table
-        st.subheader("Pattern Matches and Projections")
-        matched_data = []
-        for find, data in data_dic.items():
-            pattern, indices, matched, future_average = data
-            row = {
-                'Date': indices[0]['date'],
-                'Pattern': pattern
-            }
+            fig_current = go.Figure(data=[current_trace])
+            fig_current.update_layout(title="Current Stock Prices",
+                                      xaxis_title="Date", yaxis_title="Price",
+                                      showlegend=False)
+            st.plotly_chart(fig_current)
 
-            # Add the matched days (historical pattern), in reverse order to show Day 1 as the latest match
-            for i, index in enumerate(reversed(matched)):
-                row[f'Day {i+1}'] = index['percentage_difference']
+        # Display future values in the second column
+        with col2:
+            st.subheader("Future Stock Projections")
+            future_traces = []
+            colors = ['green', 'red', 'purple', 'orange', 'brown']
+            last_close = current_prices[-1]
+            last_date = dates[-1]
 
-            # Mark the end of the pattern match
-            # Separator to show end of matched pattern
-            row['End of Match'] = '⬇️'
+            # Create a DataFrame for matched projections
+            matched_data = []
+            for i, (_, data) in enumerate(list(data_dic.items())[:5]):
+                pattern, indices, _, _ = data
+                for index in indices[:10]:
+                    matched_data.append({
+                        'date': index['date'],
+                        'percentage_difference': index['percentage_difference']
+                    })
 
-            # Add the future projection days
-            # Limit future days to 5 for display
-            for j, index in enumerate(indices[:5]):
-                row[f'Future Day {j+1}'] = index['percentage_difference']
+            future_df = pd.DataFrame(matched_data)
+            st.dataframe(future_df)
 
-            row['Future Avg'] = future_average  # The average future return
-            matched_data.append(row)
+            # Plot future projections
+            for i, (_, data) in enumerate(list(data_dic.items())[:5]):
+                pattern, indices, _, _ = data
+                future_returns = [
+                    index['percentage_difference'] / 100 for index in indices[:10]]
+                future_prices = [last_close]
+                for j in range(10):
+                    future_prices.append(
+                        future_prices[-1] * (1 + future_returns[j]))
+                future_dates = [last_date + timedelta(days=j+1) for j in range(10)]
+                future_trace = go.Scatter(
+                    x=future_dates, y=future_prices[1:], mode='lines', name=f'Future Return {i+1} ({pattern})', marker=dict(color=colors[i]))
+                future_traces.append(future_trace)
 
-        matched_df = pd.DataFrame(matched_data)
-
-        # Apply styles only to the percentage difference columns
-        percentage_columns = [
-            col for col in matched_df.columns if 'Day' in col or col == 'Future Avg']
-
-        # Custom styling for the matched entries table
-        def style_cell(val):
-            color = 'black'
-            if val > 0:
-                background_color = 'green'
-            elif val < 0:
-                background_color = 'red'
-            else:
-                background_color = 'white'
-            return f'background-color: {background_color}; color: {color}; font-weight: bold;'
-
-        styles = [
-            dict(selector="th", props=[
-                 ("font-weight", "bold"), ("text-align", "center")]),
-            dict(selector="td", props=[("text-align", "center")])
-        ]
-
-        # Style and display the dataframe with a clear separation between matched and future days
-        cm = matched_df.style.set_table_styles(styles)\
-            .applymap(style_cell, subset=percentage_columns)
-
-        st.dataframe(cm)
-
-        # Create Plotly chart
-        st.subheader("Stock Prices and Future Projections")
-        dates = [datetime.strptime(data['date'], '%d-%b-%Y')
-                 for data in current_values]
-        current_prices = [data['close'] for data in current_values]
-        current_trace = go.Scatter(x=dates, y=current_prices, mode='lines+markers',
-                                   name='Current Stock Prices', marker=dict(color='blue'))
-
-        future_traces = []
-        colors = ['green', 'red', 'purple', 'orange', 'brown']
-        last_close = current_prices[-1]
-        last_date = dates[-1]
-
-        for i, (_, data) in enumerate(list(data_dic.items())[:5]):
-            pattern, indices, _, _ = data
-            future_returns = [
-                index['percentage_difference'] / 100 for index in indices[:10]]
-            # Start future prices from the last close price
-            future_prices = [last_close]
-            for j in range(10):
-                future_prices.append(
-                    future_prices[-1] * (1 + future_returns[j]))
-            # Start future dates after the last date
-            future_dates = [last_date +
-                            timedelta(days=j+1+7) for j in range(10)]
-            future_trace = go.Scatter(
-                x=future_dates, y=future_prices[1:], mode='lines', name=f'Future Return {i+1} ({pattern})', marker=dict(color=colors[i]))
-            future_traces.append(future_trace)
-
-        fig = go.Figure(data=[current_trace] + future_traces)
-        fig.update_layout(title='Stock Prices and Future Projections',
-                          xaxis_title='Date', yaxis_title='Price')
-        st.plotly_chart(fig)
+            fig_future = go.Figure(data=future_traces)
+            fig_future.update_layout(title="Future Projections",
+                                     xaxis_title="Date", yaxis_title="Price",
+                                     showlegend=False)
+            st.plotly_chart(fig_future)
 
 
 if __name__ == "__main__":
