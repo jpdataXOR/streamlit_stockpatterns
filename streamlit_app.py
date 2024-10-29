@@ -10,11 +10,11 @@ data_dic = {}
 current_values = []
 
 
-def get_stock_data(stock_symbol):
+def get_stock_data(stock_symbol, interval):
     global data_dic, current_values
 
     instrument = yf.Ticker(stock_symbol)
-    array_data = instrument.history(period="max")
+    array_data = instrument.history(period="1y", interval=interval)  # Use interval here
 
     result_string = ''.join(['U' if array_data.iloc[i]['Close'] >= array_data.iloc[i-1]['Close'] else 'D'
                              for i in range(1, len(array_data))])
@@ -39,7 +39,7 @@ def get_stock_data(stock_symbol):
 
     # Get last 8 values for current values and past prices
     current_values = [{
-        'date': array_data.iloc[count].name.strftime('%d-%b-%Y'),
+        'date': array_data.iloc[count].name.strftime('%d-%b-%Y %H:%M' if interval == "1h" else '%d-%b-%Y'),
         'close': array_data.iloc[count]['Close'],
         'percentage_difference': ((array_data.iloc[count]['Close'] - array_data.iloc[count+1]['Close']) /
                                   array_data.iloc[count+1]['Close']) * 100
@@ -47,7 +47,7 @@ def get_stock_data(stock_symbol):
 
     # Get past prices
     past_prices = [{
-        'date': array_data.iloc[count].name.strftime('%d-%b-%Y'),
+        'date': array_data.iloc[count].name.strftime('%d-%b-%Y %H:%M' if interval == "1h" else '%d-%b-%Y'),
         'close': array_data.iloc[count]['Close'],
         'percentage_difference': ((array_data.iloc[count]['Close'] - array_data.iloc[count+1]['Close']) /
                                   array_data.iloc[count+1]['Close']) * 100
@@ -58,14 +58,14 @@ def get_stock_data(stock_symbol):
 
 def print_difference_data(arg_array, index, matched_length, forward_length):
     matched = [{
-        'date': arg_array.iloc[count].name.strftime('%d-%b-%Y'),
+        'date': arg_array.iloc[count].name.strftime('%d-%b-%Y %H:%M'),
         'close': arg_array.iloc[count]['Close'],
         'percentage_difference': ((arg_array.iloc[count]['Close'] - arg_array.iloc[count+1]['Close']) /
                                   arg_array.iloc[count+1]['Close']) * 100
     } for count in range(index, index + matched_length)]
 
     indices = [{
-        'date': arg_array.iloc[count].name.strftime('%d-%b-%Y'),
+        'date': arg_array.iloc[count].name.strftime('%d-%b-%Y %H:%M'),
         'close': arg_array.iloc[count]['Close'],
         'percentage_difference': ((arg_array.iloc[count-1]['Close'] - arg_array.iloc[count]['Close']) /
                                   arg_array.iloc[count]['Close']) * 100
@@ -99,10 +99,11 @@ def main():
     }
 
     selected_stock = st.selectbox("Select a stock", list(stock_options.keys()))
+    selected_interval = st.selectbox("Select an interval", ["1d", "1h"])
 
     if st.button("Analyze"):
         data_dic, current_values, past_prices = get_stock_data(
-            stock_options[selected_stock])
+            stock_options[selected_stock], selected_interval)
 
         # Separate columns for current and future projections
         col1, col2 = st.columns(2)
@@ -112,16 +113,19 @@ def main():
             st.subheader("Current Stock Prices")
 
             # Create Plotly chart for current prices
-            dates = [datetime.strptime(data['date'], '%d-%b-%Y')
+            dates = [datetime.strptime(data['date'], '%d-%b-%Y %H:%M' if selected_interval == "1h" else '%d-%b-%Y')
                      for data in current_values]
             current_prices = [data['close'] for data in current_values]
             current_trace = go.Scatter(x=dates, y=current_prices, mode='lines+markers',
                                        name='Current Stock Prices', marker=dict(color='blue'))
 
             fig_current = go.Figure(data=[current_trace])
-            fig_current.update_layout(title="Current Stock Prices",
-                                      xaxis_title="Date", yaxis_title="Price",
-                                      showlegend=False)
+            fig_current.update_layout(
+                title="Current Stock Prices",
+                xaxis_title="Date & Time" if selected_interval == "1h" else "Date",
+                yaxis_title="Price",
+                showlegend=False
+            )
             st.plotly_chart(fig_current)
 
             # Display current prices table below the chart
@@ -146,15 +150,20 @@ def main():
                 for j in range(10):
                     future_prices.append(
                         future_prices[-1] * (1 + future_returns[j]))
-                future_dates = [last_date + timedelta(days=j+1) for j in range(10)]
+                
+                future_dates = [last_date + timedelta(hours=j+1) if selected_interval == "1h" else last_date + timedelta(days=j+1) for j in range(10)]
+                
                 future_trace = go.Scatter(
                     x=future_dates, y=future_prices[1:], mode='lines', name=f'Future Return {i+1} ({pattern})', marker=dict(color=colors[i]))
                 future_traces.append(future_trace)
 
             fig_future = go.Figure(data=future_traces)
-            fig_future.update_layout(title="Future Projections",
-                                     xaxis_title="Date", yaxis_title="Price",
-                                     showlegend=False)
+            fig_future.update_layout(
+                title="Future Projections",
+                xaxis_title="Date & Time" if selected_interval == "1h" else "Date",
+                yaxis_title="Price",
+                showlegend=False
+            )
             st.plotly_chart(fig_future)
 
             # Display future projections table below the chart
