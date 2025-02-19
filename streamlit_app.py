@@ -14,7 +14,7 @@ def get_stock_data(stock_symbol, interval):
     global data_dic, current_values
 
     instrument = yf.Ticker(stock_symbol)
-    array_data = instrument.history(period="1y", interval=interval)  # Use interval here
+    array_data = instrument.history(period="1y", interval=interval,auto_adjust=False)  # Use interval here
 
     result_string = ''.join(['U' if array_data.iloc[i]['Close'] >= array_data.iloc[i-1]['Close'] else 'D'
                              for i in range(1, len(array_data))])
