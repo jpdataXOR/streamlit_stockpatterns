@@ -14,7 +14,8 @@ def get_stock_data(stock_symbol, interval):
     global data_dic, current_values
 
     instrument = yf.Ticker(stock_symbol)
-    array_data = instrument.history(period="1y", interval=interval,auto_adjust=False)  # Use interval here
+    array_data = instrument.history(
+        period="1y", interval=interval, auto_adjust=False)  # Use interval here
 
     result_string = ''.join(['U' if array_data.iloc[i]['Close'] >= array_data.iloc[i-1]['Close'] else 'D'
                              for i in range(1, len(array_data))])
@@ -95,7 +96,13 @@ def main():
         "AEX": "^AEX",
         "MIB": "^FTSEMIB",
         "BOVESPA": "^BVSP",
-        "IPC": "^MEXBOL"
+        "IPC": "^MEXBOL",
+        "VIX": "^VIX",
+        "USDCHF": "USDCHF=X",
+        "USDJPY": "USDJPY=X",
+        "AUDUSD": "AUDUSD=X",
+        "EURUSD": "EURUSD=X"
+
     }
 
     selected_stock = st.selectbox("Select a stock", list(stock_options.keys()))
@@ -150,9 +157,10 @@ def main():
                 for j in range(10):
                     future_prices.append(
                         future_prices[-1] * (1 + future_returns[j]))
-                
-                future_dates = [last_date + timedelta(hours=j+1) if selected_interval == "1h" else last_date + timedelta(days=j+1) for j in range(10)]
-                
+
+                future_dates = [last_date + timedelta(hours=j+1) if selected_interval ==
+                                "1h" else last_date + timedelta(days=j+1) for j in range(10)]
+
                 future_trace = go.Scatter(
                     x=future_dates, y=future_prices[1:], mode='lines', name=f'Future Return {i+1} ({pattern})', marker=dict(color=colors[i]))
                 future_traces.append(future_trace)
