@@ -87,7 +87,7 @@ def main():
     # Mapping of meaningful names to stock symbols
     stock_options = {
         "Australian Stock Exchange": "^AXJO",
-        "NASDAQ Composite": "^IXIC",
+        "NASDAQ 100": "^NDX",
         "Bitcoin": "BTC-USD",
         "Nikkei 225 - Japan": "^N225",
         "Hang Seng - Hong Kong": "^HSI",
